@@ -70,20 +70,22 @@ with st.sidebar:
 
     engine_mode = st.selectbox(
         "Inference Engine",
-        options=["mock", "ollama"],
+        options=["mock", "rag"],
         index=0 if st.session_state.engine_mode == "mock" else 1,
-        help="mock = keyword-based demo (no GPU needed)\nollama = local Mistral-7B via Ollama",
+        help="mock = keyword-based demo (no GPU needed)\nrag = vLLM + Outlines constrained generation",
     )
 
-    if engine_mode == "ollama":
-        ollama_model = st.text_input("Ollama Model", value="mistral:7b")
-        if st.button("Check Ollama Connection"):
-            from inference_engine import OllamaInferenceEngine
-            eng = OllamaInferenceEngine(model=ollama_model)
-            if eng.is_available():
-                st.success("✅ Ollama is running!")
-            else:
-                st.error("❌ Cannot reach Ollama. Start with `ollama serve`")
+    if engine_mode == "rag":
+        rag_model = st.text_input("Model", value="Qwen/Qwen2.5-7B-Instruct")
+        if st.button("Check CUDA"):
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    st.success(f"CUDA ready — {torch.cuda.get_device_name(0)}")
+                else:
+                    st.warning("CUDA not available. RAG mode needs GPU.")
+            except ImportError:
+                st.warning("PyTorch not installed.")
 
     auto_threshold = st.slider(
         "Auto-Approve Confidence Threshold",
@@ -222,12 +224,9 @@ with tab_sim:
                 for label, (code, readable) in mapping_data.items():
                     st.metric(label, readable, delta=code, delta_color="off")
 
-                # ── Reasoning ──
-                if mapping.reasoning:
-                    with st.expander("🧠 Model Reasoning (Chain of Thought)", expanded=True):
-                        st.markdown(f"*{mapping.reasoning}*")
+                # ── Reasoning removed in v1.3.0 — constrained generation guarantees valid output
 
-                # ── Layer 1: Mapped / Context / Ignored ──
+                # ── Full JSON ──
                 if result.mapped_fields:
                     with st.expander("📋 Mapped Fields (Hard-Mapped via Control Table)", expanded=False):
                         st.json(result.mapped_fields)
@@ -409,8 +408,6 @@ with tab_batch:
                         )
                     if r.review_reason:
                         st.warning(r.review_reason)
-                    if m.reasoning:
-                        st.caption(f"💭 {m.reasoning}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -532,7 +529,6 @@ with tab_overrides:
 
 st.divider()
 st.caption(
-    "🐶 CMMS NLP Pipeline · Built by farts (code-puppy-472b42) · "
-    "100% local · Zero data leaves your machine · "
+    "🐶 CMMS NLP Pipeline · v1.3.0 RAG + Constrained Generation · "
     f"Engine: `{st.session_state.engine_mode}`"
 )

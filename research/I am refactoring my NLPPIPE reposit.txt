@@ -1,0 +1,156 @@
+I am refactoring my NLPPIPE repository. We are shifting from a Fine-Tuning architecture to a Retrieval-Augmented Generation (RAG) architecture using In-Context Learning and Constrained Generation.
+
+Execute the following structural changes:
+
+Delete train.py.
+
+Create a new file named rag_pipeline.py that replaces the old inference_engine.py.
+
+Requirements for rag_pipeline.py:
+
+Use sentence-transformers (specifically all-MiniLM-L6-v2) to embed dataset.jsonl into memory as a vector store.
+
+When a new ticket string arrives, execute a cosine similarity search to retrieve the top 5 most similar historical tickets from dataset.jsonl.
+
+Construct a system prompt containing those 5 retrieved examples.
+
+Use vLLM and outlines to run the base model (Qwen/Qwen2.5-7B-Instruct or mistralai/Mistral-7B-Instruct-v0.3) locally on the GPU.
+
+Force the LLM to output exactly to the Pydantic schema defined in schemas.py using outlines.generate.json.
+
+Output the entire rag_pipeline.py and schemas.py files in full. Do not use snippets, placeholders, or "// add your code here" comments. Integrate all changes completely.
+
+You do not need to wait for DeepSeek to generate this. The complete, fully integrated code executing the exact RAG architecture described above is provided below.
+
+Delete train.py and inference_engine.py. Create rag_pipeline.py and update schemas.py using the exact code below.
+
+schemas.py
+Python
+
+from pydantic import BaseModel
+from enum import Enum
+
+class TradeEnum(str, Enum):
+    hvac = "TRD_001_HVAC"
+    plumbing = "TRD_002_PLMB"
+    electrical = "TRD_003_ELEC"
+
+class EquipmentEnum(str, Enum):
+    rtu = "EQP_99_RTU"
+    chiller = "EQP_88_CHLR"
+    boiler = "EQP_77_BLR"
+    sink = "EQP_11_SINK"
+    unknown = "EQP_00_UNK"
+
+class ProblemTypeEnum(str, Enum):
+    mechanical = "TYP_MECHANICAL"
+    clog = "TYP_CLOG"
+    electrical_fault = "TYP_ELEC_FAULT"
+
+class ProblemCodeEnum(str, Enum):
+    compressor_fail = "CODE_COMPRESSOR_FAIL"
+    emergency_overflow = "CODE_EMERGENCY_OVERFLOW"
+    power_loss = "CODE_POWER_LOSS"
+
+class CMMSMapping(BaseModel):
+    trade_id: TradeEnum
+    equipment_id: EquipmentEnum
+    problem_type_id: ProblemTypeEnum
+    problem_code_id: ProblemCodeEnum
+    confidence_score: float
+rag_pipeline.py
+Python
+
+import json
+import torch
+import pandas as pd
+from sentence_transformers import SentenceTransformer, util
+import outlines
+from schemas import CMMSMapping
+
+class CMMSAdapterRAG:
+    def __init__(self, model_name="Qwen/Qwen2.5-7B-Instruct", dataset_path="dataset.jsonl", control_table_path="control_table.csv"):
+        # Load Control Table for pre-processing hardcoded mappings
+        try:
+            self.control_table = pd.read_csv(control_table_path)
+        except FileNotFoundError:
+            self.control_table = None
+        
+        # Initialize Vector Store (Sentence Transformers)
+        print("Loading Sentence Transformer...")
+        self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        self.corpus_texts = []
+        self.corpus_mappings = []
+        
+        print(f"Loading dataset from {dataset_path}...")
+        try:
+            with open(dataset_path, 'r') as f:
+                for line in f:
+                    data = json.loads(line)
+                    self.corpus_texts.append(data["input"])
+                    self.corpus_mappings.append(data["output"])
+        except FileNotFoundError:
+            print(f"Warning: {dataset_path} not found. RAG will not have historical context.")
+                
+        print("Encoding corpus embeddings...")
+        if self.corpus_texts:
+            self.corpus_embeddings = self.embedder.encode(self.corpus_texts, convert_to_tensor=True)
+        else:
+            self.corpus_embeddings = None
+        
+        # Initialize vLLM and Outlines constrained generator
+        print(f"Loading LLM {model_name} via vLLM...")
+        self.model = outlines.models.vllm(model_name, gpu_memory_utilization=0.9, max_model_len=4096)
+        self.generator = outlines.generate.json(self.model, CMMSMapping)
+
+    def retrieve_examples(self, query: str, top_k: int = 5):
+        if self.corpus_embeddings is None:
+            return []
+            
+        query_embedding = self.embedder.encode(query, convert_to_tensor=True)
+        cos_scores = util.cos_sim(query_embedding, self.corpus_embeddings)[0]
+        
+        # Ensure we don't request more results than exist in the dataset
+        actual_k = min(top_k, len(self.corpus_texts))
+        top_results = torch.topk(cos_scores, k=actual_k)
+        
+        examples = []
+        for score, idx in zip(top_results[0], top_results[1]):
+            examples.append({
+                "input": self.corpus_texts[idx],
+                "output": self.corpus_mappings[idx]
+            })
+        return examples
+
+    def map_ticket(self, client_text: str):
+        # Retrieve similar past tickets from the vector database
+        examples = self.retrieve_examples(client_text)
+        
+        # Construct the RAG Prompt
+        prompt = (
+            "You are an expert facilities maintenance dispatcher. "
+            "Map the client work order to the strict internal CMMS structure.\n\n"
+        )
+        
+        if examples:
+            prompt += "Here are examples of how similar tickets were mapped historically:\n"
+            for ex in examples:
+                prompt += f"Input: {ex['input']}\nOutput: {ex['output']}\n\n"
+        
+        prompt += f"Now, map the following new ticket.\nInput: {client_text}\nOutput:"
+        
+        # Execute Constrained Generation 
+        result = self.generator(prompt)
+        return result
+
+if __name__ == "__main__":
+    adapter = CMMSAdapterRAG(
+        model_name="Qwen/Qwen2.5-7B-Instruct",
+        dataset_path="dataset.jsonl",
+        control_table_path="control_table.csv"
+    )
+    
+    test_ticket = "Hey, we have a major issue in the men's room. The sink is backed up and won't drain, and now there is water starting to seep into the hallway carpet. We need someone here ASAP before the flooring is ruined."
+    
+    mapped_json = adapter.map_ticket(test_ticket)
+    print(mapped_json.model_dump_json(indent=2))

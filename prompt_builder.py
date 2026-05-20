@@ -20,8 +20,7 @@ You MUST output valid JSON conforming exactly to the schema below.
 2. If the description mentions multiple issues, pick the PRIMARY one.
 3. Consider the context: equipment type implies trade (e.g., HVAC unit → HVAC trade).
 4. "roof unit", "RTU", "air handler", "AC unit" all refer to Rooftop HVAC equipment.
-5. If you are unsure, use the "unknown" option but set confidence_score LOW.
-6. Include a brief "reasoning" string explaining your logic.
+5. If you are unsure, use your best judgment and set confidence_score LOW.
 
 ## ALLOWED VALUES (YOU CAN ONLY OUTPUT FROM THESE EXACT SETS)
 
@@ -47,7 +46,6 @@ You MUST output ONLY a single JSON object with these exact keys:
 - problem_type_id
 - problem_code_id
 - confidence_score (float 0.0 - 1.0)
-- reasoning (string)
 
 Do NOT include markdown code fences, explanations, or any other text. Output raw JSON only."""
 
