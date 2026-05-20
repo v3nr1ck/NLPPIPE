@@ -23,3 +23,9 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# FastAPI web app
+pipeline.db
+
+# Claude Code internal
+.claude/

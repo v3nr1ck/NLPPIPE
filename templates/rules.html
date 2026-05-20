@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}Rules Manager{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 1400px;">
+
+  <div class="mb-4">
+    <h2 class="fw-bold mb-1">📋 Rules Manager</h2>
+    <p class="text-muted mb-0">
+      View, filter, and delete pipeline rules. Changes sync to the control table and reload the pipeline immediately.
+    </p>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Left: filter + add rule form -->
+    <div class="col-lg-3">
+
+      <!-- Filter -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-header fw-semibold">Filter Rules</div>
+        <div class="card-body d-flex flex-column gap-3">
+          <div>
+            <label class="form-label small fw-semibold">Client</label>
+            <select class="form-select form-select-sm"
+                    hx-get="/htmx/rules-list"
+                    hx-target="#rules-groups"
+                    hx-trigger="change"
+                    hx-include="#filter-form"
+                    name="filter_client"
+                    form="filter-form">
+              <option value="">All clients</option>
+              {% for c in clients %}
+              <option value="{{ c }}">{{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="form-label small fw-semibold">Strategy</label>
+            <select class="form-select form-select-sm"
+                    hx-get="/htmx/rules-list"
+                    hx-target="#rules-groups"
+                    hx-trigger="change"
+                    hx-include="#filter-form"
+                    name="filter_strategy"
+                    form="filter-form">
+              <option value="">All strategies</option>
+              <option value="map">Direct Map</option>
+              <option value="context">Context Cloud</option>
+              <option value="ignore">Ignore</option>
+            </select>
+          </div>
+          <form id="filter-form"></form>
+        </div>
+      </div>
+
+      <!-- Add rule -->
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold">Add Rule</div>
+        <div class="card-body">
+          <form hx-post="/htmx/rules/create"
+                hx-target="#rules-groups"
+                hx-swap="innerHTML"
+                class="d-flex flex-column gap-2">
+
+            <div>
+              <label class="form-label small fw-semibold">Client <span class="text-muted fw-normal">(* = all)</span></label>
+              <input type="text" class="form-control form-control-sm" name="new_client"
+                     list="clients-list" placeholder="* or ACME Corp">
+              <datalist id="clients-list">
+                {% for c in clients %}<option value="{{ c }}">{% endfor %}
+              </datalist>
+            </div>
+
+            <div>
+              <label class="form-label small fw-semibold">Source Field</label>
+              <input type="text" class="form-control form-control-sm" name="new_source_field"
+                     required placeholder="e.g. craft">
+            </div>
+
+            <div>
+              <label class="form-label small fw-semibold">Source Value <span class="text-muted fw-normal">(* = any)</span></label>
+              <input type="text" class="form-control form-control-sm" name="new_source_value"
+                     placeholder="mechanic  or  RTU-*  or  *">
+            </div>
+
+            <div>
+              <label class="form-label small fw-semibold">Strategy</label>
+              <select class="form-select form-select-sm" name="new_strategy"
+                      onchange="toggleTargetFields(this.value)">
+                <option value="context">Context Cloud</option>
+                <option value="map">Direct Map</option>
+                <option value="ignore">Ignore</option>
+              </select>
+            </div>
+
+            <div id="target-fields" style="display:none;" class="d-flex flex-column gap-2">
+              <div>
+                <label class="form-label small fw-semibold">→ CMMS Field</label>
+                <select class="form-select form-select-sm" name="new_target_field"
+                        onchange="updateTargetValues(this.value)">
+                  <option value="">— select —</option>
+                  {% for f in target_fields %}
+                  <option value="{{ f }}">{{ f }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label small fw-semibold">→ CMMS Value</label>
+                <select class="form-select form-select-sm" name="new_target_value" id="new-target-value">
+                  <option value="">— select field first —</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="form-label small fw-semibold">Priority</label>
+              <input type="number" class="form-control form-control-sm" name="new_priority"
+                     value="5" min="0" max="99">
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm w-100 mt-1">Add Rule →</button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right: rules tables -->
+    <div class="col-lg-9">
+      <div id="rules-groups">
+        {{ map_rules | length }} direct mapping rules,
+        {{ context_rules | length }} context rules,
+        {{ ignore_rules | length }} ignore rules loaded.
+
+        {% set grouped = {"map": map_rules, "context": context_rules, "ignore": ignore_rules} %}
+
+        <!-- Direct Mappings -->
+        <div class="mb-4">
+          <h6 class="fw-semibold text-success mb-2">
+            🔒 Direct Mappings
+            <span class="badge bg-success-subtle text-success border border-success-subtle ms-2">{{ map_rules | length }}</span>
+          </h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0 border rounded overflow-hidden">
+              <thead class="table-light">
+                <tr><th>Client</th><th>Source Field</th><th>When Value</th><th>→ CMMS Field</th><th>→ Value</th><th>Pri</th><th></th></tr>
+              </thead>
+              <tbody>
+                {% for r in map_rules %}
+                <tr id="rule-row-{{ r.id }}">
+                  <td class="small">{% if r.client_name == '*' %}<span class="text-muted">all</span>{% else %}{{ r.client_name }}{% endif %}</td>
+                  <td><code class="small">{{ r.source_field }}</code></td>
+                  <td><code class="small text-muted">{{ r.source_value }}</code></td>
+                  <td><code class="small">{{ r.target_field }}</code></td>
+                  <td><code class="small">{{ r.target_value }}</code></td>
+                  <td class="small text-muted">{{ r.priority }}</td>
+                  <td>
+                    <button class="btn btn-sm btn-outline-danger border-0 px-2 py-0"
+                            hx-delete="/htmx/rules/{{ r.id }}"
+                            hx-target="#rule-row-{{ r.id }}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete this rule?"
+                            title="Delete">✕</button>
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-muted text-center py-3">No direct mapping rules yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Context Cloud -->
+        <div class="mb-4">
+          <h6 class="fw-semibold text-primary mb-2">
+            ☁ Context Cloud
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2">{{ context_rules | length }}</span>
+          </h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0 border rounded overflow-hidden">
+              <thead class="table-light">
+                <tr><th>Client</th><th>Source Field</th><th>When Value</th><th>Pri</th><th></th></tr>
+              </thead>
+              <tbody>
+                {% for r in context_rules %}
+                <tr id="rule-row-{{ r.id }}">
+                  <td class="small">{% if r.client_name == '*' %}<span class="text-muted">all</span>{% else %}{{ r.client_name }}{% endif %}</td>
+                  <td><code class="small">{{ r.source_field }}</code></td>
+                  <td><code class="small text-muted">{{ r.source_value }}</code></td>
+                  <td class="small text-muted">{{ r.priority }}</td>
+                  <td>
+                    <button class="btn btn-sm btn-outline-danger border-0 px-2 py-0"
+                            hx-delete="/htmx/rules/{{ r.id }}"
+                            hx-target="#rule-row-{{ r.id }}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete this rule?"
+                            title="Delete">✕</button>
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-muted text-center py-3">No context rules yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Ignored Fields -->
+        <div class="mb-4">
+          <h6 class="fw-semibold text-secondary mb-2">
+            🚫 Ignored Fields
+            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-2">{{ ignore_rules | length }}</span>
+          </h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0 border rounded overflow-hidden">
+              <thead class="table-light">
+                <tr><th>Client</th><th>Source Field</th><th>When Value</th><th>Pri</th><th></th></tr>
+              </thead>
+              <tbody>
+                {% for r in ignore_rules %}
+                <tr id="rule-row-{{ r.id }}">
+                  <td class="small">{% if r.client_name == '*' %}<span class="text-muted">all</span>{% else %}{{ r.client_name }}{% endif %}</td>
+                  <td><code class="small">{{ r.source_field }}</code></td>
+                  <td><code class="small text-muted">{{ r.source_value }}</code></td>
+                  <td class="small text-muted">{{ r.priority }}</td>
+                  <td>
+                    <button class="btn btn-sm btn-outline-danger border-0 px-2 py-0"
+                            hx-delete="/htmx/rules/{{ r.id }}"
+                            hx-target="#rule-row-{{ r.id }}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete this rule?"
+                            title="Delete">✕</button>
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-muted text-center py-3">No ignore rules yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- #rules-groups -->
+    </div>
+
+  </div>
+</div>
+
+<script>
+const TARGET_VALUES = {{ target_values | tojson }};
+
+function toggleTargetFields(strategy) {
+  document.getElementById('target-fields').style.display =
+    strategy === 'map' ? 'flex' : 'none';
+}
+
+function updateTargetValues(field) {
+  const sel = document.getElementById('new-target-value');
+  sel.innerHTML = '<option value="">— select value —</option>';
+  (TARGET_VALUES[field] || []).forEach(([val, label]) => {
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = `${val} — ${label}`;
+    sel.appendChild(opt);
+  });
+}
+</script>
+{% endblock %}
