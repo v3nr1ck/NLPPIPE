@@ -63,13 +63,18 @@ class PreProcessor:
         with open(path, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
+                # Skip comment lines and empty rows
+                source_field = (row.get("source_field") or "").strip()
+                if not source_field or source_field.startswith("#"):
+                    continue
+
                 rule = ControlRule(
                     client_name=row["client_name"].strip(),
-                    source_field=row["source_field"].strip().lower(),
-                    source_value=row["source_value"].strip().lower(),
-                    target_field=row.get("target_field", "").strip(),
-                    target_value=row.get("target_value", "").strip(),
-                    strategy=row.get("strategy", "map").strip(),  # type: ignore[arg-type]
+                    source_field=source_field.lower(),
+                    source_value=(row.get("source_value") or "").strip().lower(),
+                    target_field=(row.get("target_field") or "").strip(),
+                    target_value=(row.get("target_value") or "").strip(),
+                    strategy=(row.get("strategy") or "map").strip(),  # type: ignore[arg-type]
                     priority=int(row.get("priority", 0)),
                 )
                 self.rules.append(rule)
