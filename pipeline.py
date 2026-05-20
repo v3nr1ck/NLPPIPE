@@ -33,7 +33,7 @@ from typing import Optional
 from schemas import ClientWorkOrder, PipelineResult
 from pre_processor import PreProcessor, PreProcessResult
 from prompt_builder import build_system_prompt, build_user_prompt
-from inference_engine import get_engine, InferenceEngine, InferenceResult
+from rag_pipeline import get_engine, RAGEngine, MockRAGEngine, InferenceResult
 from post_processor import PostProcessor, MetricsTracker
 from vendor_profile import VendorProfileLoader, VendorProfile
 
@@ -47,7 +47,7 @@ class CMMSPipeline:
     The full Logic Sandwich: Rules → LLM → Validation.
 
     Parameters:
-        engine_mode: "mock" or "ollama"
+        engine_mode: "mock" or "rag"
         vendor: Optional vendor profile key (e.g. "maximo", "fiix", "upkeep")
                 When set, the pipeline auto-flattens nested payloads and aliases
                 vendor field names to canonical names before processing.
@@ -80,7 +80,7 @@ class CMMSPipeline:
         )
 
         # ── Layer 2 ──
-        self.engine: InferenceEngine = get_engine(engine_mode, **engine_kwargs)
+        self.engine: RAGEngine | MockRAGEngine = get_engine(engine_mode, **engine_kwargs)
 
         # ── Layer 3 ──
         self.post_processor = PostProcessor(auto_threshold=auto_threshold)

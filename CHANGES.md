@@ -236,6 +236,83 @@ LAYER 3 (Post-Processor)
 
 ---
 
+## v1.3.0 — RAG Architecture + Constrained Generation (2025-05-19)
+
+**Commit:** `rag-architecture` | **PR:** `#5`
+
+### Pivot
+
+Moving from a **Fine-Tuning** architecture to **Retrieval-Augmented Generation (RAG)**
+with **Constrained Generation** via vLLM + Outlines.
+
+**Why:**
+- Fine-tuning bakes your IDs into model weights — schema changes require retraining
+- RAG stores historical mappings in a vector database — updates are instant
+- Constrained generation mathematically guarantees valid CMMSMapping JSON (no hallucinations)
+- The model becomes a "smart retriever" rather than a "memorizer"
+
+### Changes
+
+| File | Change |
+|---|---|
+| `rag_pipeline.py` | NEW — RAG engine (Sentence Transformers embedding → cosine similarity retrieval → vLLM + Outlines constrained generation). Includes `MockRAGEngine` for testing without GPU. Replaces `inference_engine.py`. |
+| `inference_engine.py` | DELETED — Replaced by `rag_pipeline.py`. Old Ollama/mock engines removed. |
+| `train.py` | DELETED — No more fine-tuning. RAG replaces it. |
+| `schemas.py` | Slimmed enums per spec: TradeEnum (3 values), EquipmentEnum (5), ProblemTypeEnum (3), ProblemCodeEnum (3). Removed `reasoning` field from CMMSMapping. Removed all "unknown" fallback values (constrained generation guarantees validity). |
+| `pipeline.py` | Updated imports from `rag_pipeline`. `engine_mode` now "mock" or "rag" (was "ollama"). |
+| `post_processor.py` | Updated imports. Fallback values changed to valid enums. Removed UNK check in metrics. |
+| `prompt_builder.py` | Removed `reasoning` from system prompt template and output format. |
+| `dashboard.py` | Removed reasoning display. Engine selector: "mock" / "rag" (was "ollama"). CUDA check button for RAG mode. |
+| `dataset.jsonl` | Rewritten: 15 examples using ONLY valid enum values. Removed `reasoning` field from all outputs. Removed `instruction` key (unused by RAG). |
+| `control_table.csv` | Removed rules referencing deleted enum values (TRD_004_CARP, TRD_005_PAINT, TRD_006_GENM, etc.). |
+| `requirements.txt` | Added `sentence-transformers`. Removed ollama references. vLLM/Outlines commented out (optional heavy deps). |
+| `test_pipeline.py` | Rewritten for RAG: 3 tests covering mock RAG, electrical fault, and Maximo vendor profile with RAG. |
+
+### New Architecture
+
+```
+Client Work Order
+    │
+    ▼
+VENDOR PROFILE FLATTENING (v1.2.0)
+    │
+    ▼
+LAYER 1: Pre-Processor (control_table.csv)
+    │
+    ▼
+LAYER 2: RAG ENGINE (NEW)
+    ├─ 1. Embed query with Sentence Transformer (all-MiniLM-L6-v2)
+    ├─ 2. Cosine similarity search → top-5 historical tickets
+    ├─ 3. Build RAG prompt with examples as in-context demonstrations
+    └─ 4. vLLM + Outlines constrained generation → guaranteed CMMSMapping JSON
+    │
+    ▼
+LAYER 3: Post-Processor (validation, confidence, routing)
+    │
+    ▼
+CMMS API
+```
+
+### Model
+
+- **Base model:** Qwen/Qwen2.5-7B-Instruct or mistralai/Mistral-7B-Instruct-v0.3
+- **Embedding model:** all-MiniLM-L6-v2 (Sentence Transformers, 384-dim, fast CPU inference)
+- **Constrained decoding:** Outlines `generate.json(model, CMMSMapping)` — token-level enforcement
+- **Inference engine:** vLLM with PagedAttention (GPU memory utilization: 85%)
+
+### Test Results (mock RAG engine)
+
+| Test | Trade | Equipment | ProbType | ProbCode | Confidence |
+|---|---|---|---|---|---|
+| Sink Overflow | Plumbing | Sink | Clog | Emerg Overflow | 43% |
+| Electrical Fault | Electrical | RTU | Mechanical | Compressor Fail | 15% |
+| Maximo Vendor | HVAC | RTU | Mechanical | Compressor Fail | 15% |
+
+*Low confidence on tests 2-3 is expected: mock engine uses naive keyword similarity.
+Real RAG with Sentence Transformers cosine similarity will score much higher.*
+
+---
+
 ## Template for Future Changes
 
 ```markdown

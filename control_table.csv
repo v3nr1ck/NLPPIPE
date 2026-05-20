@@ -4,16 +4,11 @@ client_name,source_field,source_value,target_field,target_value,strategy,priorit
 *,craft,electrician,trade_id,TRD_003_ELEC,map,10
 *,craft,plumber,trade_id,TRD_002_PLMB,map,10
 *,craft,pipefitter,trade_id,TRD_002_PLMB,map,10
-*,craft,carpenter,trade_id,TRD_004_CARP,map,10
-*,craft,painter,trade_id,TRD_005_PAINT,map,10
-*,craft,handyman,trade_id,TRD_006_GENM,map,10
 *,trade_code,MECH,trade_id,TRD_001_HVAC,map,10
 *,trade_code,ELEC,trade_id,TRD_003_ELEC,map,10
 *,trade_code,PLMB,trade_id,TRD_002_PLMB,map,10
 ACME Corp,equipment_tag,RTU-*,equipment_id,EQP_99_RTU,map,10
 ACME Corp,equipment_tag,CHLR-*,equipment_id,EQP_88_CHLR,map,10
-Global Facilities,asset,roof unit,equipment_id,EQP_99_RTU,map,10
-Global Facilities,asset,air handler,equipment_id,EQP_99_RTU,map,10
 *,priority,urgent,,,context,8
 *,priority,emergency,,,context,8
 *,priority,P1,,,context,8

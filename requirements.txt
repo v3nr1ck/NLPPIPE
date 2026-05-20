@@ -1,21 +1,15 @@
 # Core pipeline
 pydantic>=2.0
 
+# RAG engine
+sentence-transformers>=3.0
+
+# Constrained generation (vLLM + Outlines — GPU required)
+# vllm>=0.6.0
+# outlines>=0.1.0
+
 # Dashboard
 streamlit>=1.28
 
-# Inference (optional — only needed for Ollama mode)
-# No extra deps needed for urllib-based Ollama calls
-
-# Fine-tuning (optional — only needed for train.py)
-# unsloth[colab-new]
-# trl<0.9.0
-# peft
-# accelerate
-# bitsandbytes
-# datasets
-
-# Production inference with constrained generation (future)
-# vLLM
-# outlines
-# outlines[vllm]
+# Vendor profiles (optional)
+# No extra deps — uses stdlib json
