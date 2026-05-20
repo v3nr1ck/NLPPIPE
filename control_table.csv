@@ -1,0 +1,16 @@
+client_name,source_field,source_value,target_field,target_value,is_hard_mapped,priority
+*,craft,mechanic,trade_id,TRD_001_HVAC,true,10
+*,craft,sparky,trade_id,TRD_003_ELEC,true,10
+*,craft,electrician,trade_id,TRD_003_ELEC,true,10
+*,craft,plumber,trade_id,TRD_002_PLMB,true,10
+*,craft,pipefitter,trade_id,TRD_002_PLMB,true,10
+*,craft,carpenter,trade_id,TRD_004_CARP,true,10
+*,craft,painter,trade_id,TRD_005_PAINT,true,10
+*,craft,handyman,trade_id,TRD_006_GENM,true,10
+*,priority,urgent,confidence_boost,,true,5
+*,priority,emergency,confidence_boost,,true,5
+*,priority,P1,confidence_boost,,true,5
+*,priority,low,,,false,0
+ACME Corp,asset,roof unit,equipment_id,EQP_99_RTU,true,10
+ACME Corp,asset,ac unit,equipment_id,EQP_99_RTU,true,10
+Global Facilities,asset,air handler,equipment_id,EQP_99_RTU,true,10
