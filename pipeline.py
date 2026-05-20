@@ -1,16 +1,21 @@
 """
 Pipeline Orchestrator
 Wires Layer 1 (Pre-Processor), Layer 2 (LLM Inference), and Layer 3 (Post-Processor)
-into a single callable pipeline.
+into a single callable pipeline. Accepts arbitrary client field names.
 
 Usage:
     pipeline = CMMSPipeline(engine_mode="mock")
     result = pipeline.run(ClientWorkOrder(
-        asset="roof unit",
-        issue="compressor grinding, blowing warm air",
-        craft="mechanic",
+        client_name="ACME Corp",
+        extra_fields={
+            "equipment_tag": "RTU-4",
+            "work_desc": "compressor grinding, blowing warm air",
+            "trade_code": "MECH",
+            "building": "HQ",
+            "floor": "3",
+            "requested_by": "janet",
+        }
     ))
-    print(result.mapping.json(indent=2))
 """
 from __future__ import annotations
 from pathlib import Path
@@ -55,35 +60,29 @@ class CMMSPipeline:
 
     def run(self, work_order: ClientWorkOrder) -> PipelineResult:
         """
-        Process a single client work order through the full pipeline.
+        Process a single (potentially arbitrary) client work order.
         """
-        # ── Build raw fields dict from the work order ──
-        raw_fields = {
-            "asset": work_order.asset or "",
-            "issue": work_order.issue or "",
-            "craft": work_order.craft or "",
-            "priority": work_order.priority or "",
-            "location": work_order.location or "",
-        }
-        if work_order.raw_text:
-            raw_fields["raw_text"] = work_order.raw_text
+        # Flatten all fields from the dynamic work order
+        all_fields = work_order.all_fields
 
         # ── LAYER 1: Pre-Processing ──
         pre_result = self.pre_processor.process(
             client_name=work_order.client_name or work_order.client_id,
-            raw_fields=raw_fields,
+            extra_fields=all_fields,
         )
 
         # ── Determine if we need the LLM ──
-        llm_called = len(pre_result.remaining_fields) > 0
+        llm_called = len(pre_result.remaining_for_llm) > 0
 
         if llm_called:
             # ── LAYER 2a: Build prompts ──
             system_prompt = build_system_prompt(
-                hard_mapped=pre_result.hard_mapped,
-                hints=pre_result.hints,
+                mapped_fields=pre_result.mapped,
             )
-            user_prompt = build_user_prompt(raw_fields)
+            user_prompt = build_user_prompt(
+                context_fields=pre_result.context,
+                raw_text=work_order.raw_text,
+            )
 
             # ── LAYER 2b: Run inference ──
             inference_result = self.engine.infer(
@@ -104,7 +103,9 @@ class CMMSPipeline:
         result = self.post_processor.process(
             original=work_order,
             inference_result=inference_result,
-            pre_processed_fields=pre_result.hard_mapped,
+            mapped_fields=pre_result.mapped,
+            context_fields=pre_result.context,
+            ignored_fields=pre_result.ignored,
             llm_called=llm_called,
         )
 

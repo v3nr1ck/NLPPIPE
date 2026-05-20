@@ -34,7 +34,9 @@ class PostProcessor:
         self,
         original: ClientWorkOrder,
         inference_result: InferenceResult,
-        pre_processed_fields: dict[str, str],
+        mapped_fields: dict[str, str],
+        context_fields: dict[str, str],
+        ignored_fields: list[str],
         llm_called: bool,
     ) -> PipelineResult:
         """Validate and route a single inference result."""
@@ -42,10 +44,10 @@ class PostProcessor:
         # ── 1. Validate against Pydantic schema ──
         mapping, validation_errors = self._validate(inference_result.parsed_json)
 
-        # ── 2. Override with pre-processed (hard-mapped) fields ──
-        # These are the "locked" fields from Layer 1 — the LLM can't override them
+        # ── 2. Override with mapped fields from Layer 1 ──
+        # These are the "locked" fields — the LLM can't override them
         if mapping:
-            for field, value in pre_processed_fields.items():
+            for field, value in mapped_fields.items():
                 setattr(mapping, field, value)
 
         # ── 3. Compute effective confidence ──
@@ -77,7 +79,9 @@ class PostProcessor:
                 confidence_score=confidence,
                 reasoning=inference_result.parsed_json.get("reasoning", "Validation failed"),
             ),
-            pre_processed_fields=pre_processed_fields,
+            mapped_fields=mapped_fields,
+            context_fields=context_fields,
+            ignored_fields=ignored_fields,
             llm_called=llm_called,
             confidence_score=confidence,
             requires_review=requires_review,

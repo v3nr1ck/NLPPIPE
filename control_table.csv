@@ -1,16 +1,36 @@
-client_name,source_field,source_value,target_field,target_value,is_hard_mapped,priority
-*,craft,mechanic,trade_id,TRD_001_HVAC,true,10
-*,craft,sparky,trade_id,TRD_003_ELEC,true,10
-*,craft,electrician,trade_id,TRD_003_ELEC,true,10
-*,craft,plumber,trade_id,TRD_002_PLMB,true,10
-*,craft,pipefitter,trade_id,TRD_002_PLMB,true,10
-*,craft,carpenter,trade_id,TRD_004_CARP,true,10
-*,craft,painter,trade_id,TRD_005_PAINT,true,10
-*,craft,handyman,trade_id,TRD_006_GENM,true,10
-*,priority,urgent,confidence_boost,,true,5
-*,priority,emergency,confidence_boost,,true,5
-*,priority,P1,confidence_boost,,true,5
-*,priority,low,,,false,0
-ACME Corp,asset,roof unit,equipment_id,EQP_99_RTU,true,10
-ACME Corp,asset,ac unit,equipment_id,EQP_99_RTU,true,10
-Global Facilities,asset,air handler,equipment_id,EQP_99_RTU,true,10
+client_name,source_field,source_value,target_field,target_value,strategy,priority
+*,craft,mechanic,trade_id,TRD_001_HVAC,map,10
+*,craft,sparky,trade_id,TRD_003_ELEC,map,10
+*,craft,electrician,trade_id,TRD_003_ELEC,map,10
+*,craft,plumber,trade_id,TRD_002_PLMB,map,10
+*,craft,pipefitter,trade_id,TRD_002_PLMB,map,10
+*,craft,carpenter,trade_id,TRD_004_CARP,map,10
+*,craft,painter,trade_id,TRD_005_PAINT,map,10
+*,craft,handyman,trade_id,TRD_006_GENM,map,10
+*,trade_code,MECH,trade_id,TRD_001_HVAC,map,10
+*,trade_code,ELEC,trade_id,TRD_003_ELEC,map,10
+*,trade_code,PLMB,trade_id,TRD_002_PLMB,map,10
+ACME Corp,equipment_tag,RTU-*,equipment_id,EQP_99_RTU,map,10
+ACME Corp,equipment_tag,CHLR-*,equipment_id,EQP_88_CHLR,map,10
+Global Facilities,asset,roof unit,equipment_id,EQP_99_RTU,map,10
+Global Facilities,asset,air handler,equipment_id,EQP_99_RTU,map,10
+*,priority,urgent,,,context,8
+*,priority,emergency,,,context,8
+*,priority,P1,,,context,8
+*,priority,high,,,context,6
+*,sla_tier,gold,,,context,7
+*,sla_tier,silver,,,context,6
+*,building,*,,,context,5
+*,floor,*,,,context,4
+*,location,*,,,context,5
+*,asset,*,,,context,5
+*,equipment_tag,*,,,context,5
+*,issue,*,,,context,6
+*,work_desc,*,,,context,6
+*,description,*,,,context,6
+*,requested_by,*,,,ignore,0
+*,submitted_by,*,,,ignore,0
+*,contact_email,*,,,ignore,0
+*,cost_center,*,,,ignore,0
+*,internal_notes,*,,,ignore,0
+*,timestamp,*,,,ignore,0

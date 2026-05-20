@@ -1,10 +1,11 @@
 """
-Layer 2a: Prompt Builder
-Builds the system prompt and user prompt for the LLM.
-Injects the allowed ID dictionary and any pre-mapped fields as constraints.
+Layer 2a: Prompt Builder (Dynamic)
+Builds system and user prompts from ARBITRARY client field names.
+No more hardcoded 'asset', 'issue', 'craft' — whatever the client sends
+gets injected into the prompt.
 """
 from __future__ import annotations
-from schemas import get_allowed_values_dict, TradeEnum, EquipmentEnum, ProblemTypeEnum, ProblemCodeEnum
+from schemas import get_allowed_values_dict
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -52,37 +53,26 @@ Do NOT include markdown code fences, explanations, or any other text. Output raw
 
 USER_PROMPT_TEMPLATE = """\
 Client Work Order:
-- Asset/Equipment: {asset}
-- Issue/Description: {issue}
-- Craft/Trade (client term): {craft}
-- Priority: {priority}
-- Location: {location}
-- Additional Notes: {raw_text}
+{context_lines}
 
-Map these to our internal CMMS IDs."""
+Map these to our internal CMMS IDs. Use ALL available context fields for your inference."""
 
 
 def build_system_prompt(
-    hard_mapped: dict[str, str] | None = None,
-    hints: dict[str, str] | None = None,
+    mapped_fields: dict[str, str] | None = None,
 ) -> str:
-    """Build the system prompt with allowed values and any pre-mapped constraints."""
+    """Build the system prompt with allowed values and pre-mapped constraints."""
     allowed = get_allowed_values_dict()
 
-    # Format allowed values as readable lists
     trade_ids = "\n".join(f"  - {v}" for v in allowed["trade_id"])
     equipment_ids = "\n".join(f"  - {v}" for v in allowed["equipment_id"])
     problem_type_ids = "\n".join(f"  - {v}" for v in allowed["problem_type_id"])
     problem_code_ids = "\n".join(f"  - {v}" for v in allowed["problem_code_id"])
 
-    # Format constraints
     constraints = ""
-    if hard_mapped:
-        for field, value in hard_mapped.items():
+    if mapped_fields:
+        for field, value in mapped_fields.items():
             constraints += f"- {field} = {value} (LOCKED — do not change)\n"
-    if hints:
-        for field, value in hints.items():
-            constraints += f"- {field}: prefer {value} (hint from rules)\n"
     if not constraints:
         constraints = "- No pre-mapped constraints. Infer all fields."
 
@@ -95,13 +85,25 @@ def build_system_prompt(
     )
 
 
-def build_user_prompt(work_order_dict: dict) -> str:
-    """Build the user prompt from a client work order dict."""
-    return USER_PROMPT_TEMPLATE.format(
-        asset=work_order_dict.get("asset", "Not specified"),
-        issue=work_order_dict.get("issue", work_order_dict.get("raw_text", "Not specified")),
-        craft=work_order_dict.get("craft", "Not specified"),
-        priority=work_order_dict.get("priority", "Not specified"),
-        location=work_order_dict.get("location", "Not specified"),
-        raw_text=work_order_dict.get("raw_text", ""),
-    )
+def build_user_prompt(
+    context_fields: dict[str, str],
+    raw_text: str | None = None,
+) -> str:
+    """
+    Build a dynamic user prompt from whatever context fields exist.
+    No assumptions about field names — just iterate and format.
+    """
+    lines = []
+    for field_name, field_value in sorted(context_fields.items()):
+        # Clean up the field name for readability: 'equipment_tag' → 'Equipment Tag'
+        readable = field_name.replace("_", " ").title()
+        lines.append(f"- {readable}: {field_value}")
+
+    if raw_text:
+        lines.append(f"- Additional Notes: {raw_text}")
+
+    if not lines:
+        lines.append("- (No context fields provided)")
+
+    context_block = "\n".join(lines)
+    return USER_PROMPT_TEMPLATE.format(context_lines=context_block)

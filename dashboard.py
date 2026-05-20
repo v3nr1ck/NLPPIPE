@@ -145,29 +145,48 @@ with tab_sim:
 
         with col_left:
             st.subheader("📥 Input")
+
+            # Dynamic field input — add as many client fields as you want
+            st.caption("Add client fields below. Use the field names YOUR client actually sends.")
+
             with st.form("work_order_form"):
                 client_name = st.text_input("Client Name", value="ACME Corp")
-                asset = st.text_input("Asset / Equipment", value="roof unit", 
-                                      help="e.g. 'chiller 2', 'RTU 5', 'men's room sink'")
-                issue = st.text_area("Issue / Description", 
-                                     value="compressor making grinding noise and blowing warm air",
-                                     help="Free-text problem description. Go wild — the messier the better.")
-                craft = st.text_input("Craft / Trade (client's term)", value="mechanic",
-                                      help="e.g. 'mechanic', 'sparky', 'plumber', 'handyman'")
-                priority = st.selectbox("Priority", ["", "urgent", "P1", "high", "medium", "low"])
-                location = st.text_input("Location", value="",
-                                         help="e.g. 'Building A, Floor 3'")
+
+                # Pre-populate with typical fields
+                extra_fields_str = st.text_area(
+                    "Client Fields (JSON format)",
+                    value='''{
+  "equipment_tag": "RTU-4",
+  "work_desc": "compressor making grinding noise and blowing warm air",
+  "trade_code": "MECH",
+  "building": "HQ",
+  "floor": "3",
+  "priority": "urgent",
+  "requested_by": "janet"
+}''',
+                    height=200,
+                    help="Paste or type the JSON payload your client's API sends. ANY field names work."
+                )
+
+                raw_text = st.text_area(
+                    "Raw Text (optional — for unstructured blobs)",
+                    value="",
+                    help="If the client sends a big paragraph instead of structured fields, put it here."
+                )
 
                 submitted = st.form_submit_button("🚀 Run Pipeline", use_container_width=True)
 
             if submitted:
+                try:
+                    extra_fields = json.loads(extra_fields_str)
+                except json.JSONDecodeError:
+                    st.error("Invalid JSON in Client Fields. Please fix and resubmit.")
+                    extra_fields = {}
+
                 work_order = ClientWorkOrder(
                     client_name=client_name,
-                    asset=asset if asset else None,
-                    issue=issue if issue else None,
-                    craft=craft if craft else None,
-                    priority=priority if priority else None,
-                    location=location if location else None,
+                    extra_fields=extra_fields,
+                    raw_text=raw_text if raw_text else None,
                 )
                 with st.spinner("Running pipeline..."):
                     start = time.perf_counter()
@@ -208,10 +227,16 @@ with tab_sim:
                     with st.expander("🧠 Model Reasoning (Chain of Thought)", expanded=True):
                         st.markdown(f"*{mapping.reasoning}*")
 
-                # ── Layer 1: Pre-processed fields ──
-                if result.pre_processed_fields:
-                    with st.expander("📋 Pre-Processed (Hard-Mapped via Control Table)", expanded=False):
-                        st.json(result.pre_processed_fields)
+                # ── Layer 1: Mapped / Context / Ignored ──
+                if result.mapped_fields:
+                    with st.expander("📋 Mapped Fields (Hard-Mapped via Control Table)", expanded=False):
+                        st.json(result.mapped_fields)
+                if result.context_fields:
+                    with st.expander("🔍 Context Fields (Passed to LLM for Inference)", expanded=False):
+                        st.json(result.context_fields)
+                if result.ignored_fields:
+                    with st.expander("🗑️ Ignored Fields (Dropped)", expanded=False):
+                        st.json(result.ignored_fields)
 
                 # ── Full JSON ──
                 with st.expander("📄 Full Output JSON", expanded=False):
@@ -262,11 +287,7 @@ with tab_sim:
                                     "problem_code_id": new_pcode,
                                 },
                                 "note": override_note,
-                                "original_input": {
-                                    "asset": result.original.asset,
-                                    "issue": result.original.issue,
-                                    "craft": result.original.craft,
-                                },
+                                "original_input": dict(result.original.extra_fields),
                             }
                             st.session_state.override_log.append(override)
                             st.session_state.metrics.record_override()
@@ -286,37 +307,47 @@ with tab_batch:
     with col1:
         st.subheader("Test Scenarios")
 
-        # Preset scenarios from dataset.jsonl
+        # Preset scenarios — now using dynamic extra_fields
         presets = {
-            "Compressor Failure": {
-                "asset": "RTU 4", "issue": "compressor grinding, blowing warm air", "craft": "mechanic", "priority": "urgent"
+            "Compressor Failure (ACME style)": {
+                "client": "ACME Corp",
+                "fields": {"equipment_tag": "RTU-4", "work_desc": "compressor grinding, blowing warm air", "trade_code": "MECH", "priority": "urgent"},
             },
             "Sink Overflow Emergency": {
-                "asset": "Men's Room Sink", "issue": "sink backed up, water seeping into hallway carpet. Need someone ASAP!", "craft": "plumber", "priority": "emergency"
+                "client": "GenericCo",
+                "fields": {"asset": "Men's Room Sink", "issue": "sink backed up, water seeping into hallway carpet", "craft": "plumber", "priority": "emergency"},
             },
             "Boiler Banging": {
-                "asset": "Basement Boiler", "issue": "loud banging noise, radiators cold upstairs", "craft": "pipefitter", "priority": "high"
+                "client": "Global Facilities",
+                "fields": {"asset": "Basement Boiler", "description": "loud banging noise, radiators cold upstairs", "craft": "pipefitter", "priority": "high"},
             },
             "Electrical Burning Smell": {
-                "asset": "Server Room Outlet", "issue": "lights flickering in west wing, burning smell near outlet", "craft": "sparky", "priority": "emergency"
+                "client": "Test Corp",
+                "fields": {"location": "Server Room", "issue": "lights flickering in west wing, burning smell near outlet", "craft": "sparky", "priority": "emergency"},
             },
             "Sump Pump Failure": {
-                "asset": "Basement Sump Pump", "issue": "pump not running, water pooling in basement", "craft": "plumber", "priority": "urgent"
+                "client": "GenericCo",
+                "fields": {"asset": "Basement Sump Pump", "description": "pump not running, water pooling in basement", "craft": "plumber", "priority": "urgent"},
             },
             "Ceiling Water Damage": {
-                "asset": "Hallway Ceiling", "issue": "big water stain, ceiling tiles sagging", "craft": "handyman", "priority": "medium"
+                "client": "ACME Corp",
+                "fields": {"asset": "Hallway Ceiling", "issue": "big water stain, ceiling tiles sagging", "craft": "handyman", "priority": "medium"},
             },
             "Toilet Overflow": {
-                "asset": "Men's Room Toilet", "issue": "toilet overflowing, water all over floor", "craft": "plumber", "priority": "emergency"
+                "client": "GenericCo",
+                "fields": {"asset": "Men's Room Toilet", "description": "toilet overflowing, water all over floor", "craft": "plumber", "priority": "emergency"},
             },
-            "Broken Door": {
-                "asset": "Main Entrance Door", "issue": "front door won't latch, hinge seems bent", "craft": "carpenter", "priority": "medium"
+            "Broken Door with Extra Fields": {
+                "client": "ACME Corp",
+                "fields": {"asset": "Main Entrance Door", "issue": "front door won't latch, hinge seems bent", "craft": "carpenter", "building": "HQ", "floor": "1", "requested_by": "reception"},
             },
-            "Vague — 'It's broken'": {
-                "asset": "", "issue": "It's broken", "craft": "", "priority": ""
+            "Vague — 'It's broken' (no craft)": {
+                "client": "Test Corp",
+                "fields": {"issue": "It's broken"},
             },
-            "Chiller Chemical Smell": {
-                "asset": "Chiller", "issue": "weird chemical smell coming from mechanical room near the chiller", "craft": "mechanic", "priority": "high"
+            "Chiller Chemical Smell (with ignore fields)": {
+                "client": "Global Facilities",
+                "fields": {"asset": "Chiller", "work_desc": "weird chemical smell near chiller", "trade_code": "MECH", "requested_by": "janet", "cost_center": "CC-882", "timestamp": "2025-01-15"},
             },
         }
 
@@ -333,11 +364,8 @@ with tab_batch:
                 with st.spinner(f"Processing {len(selected_presets)} work orders..."):
                     for name, scenario in selected_presets:
                         wo = ClientWorkOrder(
-                            client_name=name,
-                            asset=scenario["asset"] or None,
-                            issue=scenario["issue"] or None,
-                            craft=scenario["craft"] or None,
-                            priority=scenario["priority"] or None,
+                            client_name=scenario["client"],
+                            extra_fields=scenario["fields"],
                         )
                         result = pipeline.run(wo)
                         st.session_state.history.append(result)
@@ -357,15 +385,19 @@ with tab_batch:
                 conf = r.confidence_score
                 icon = "🟢" if conf >= 0.85 else ("🟠" if conf >= 0.70 else "🔴")
                 orig = r.original
+                # Build display summary from whatever fields exist
+                field_summary = " | ".join(f"{k}={v[:30]}" for k, v in list(orig.extra_fields.items())[:3])
+                if not field_summary:
+                    field_summary = "(no fields)"
 
                 with st.expander(
-                    f"{icon} {conf:.0%} | {orig.asset or '?'} — {orig.issue[:60] if orig.issue else '?'}...",
+                    f"{icon} {conf:.0%} | {field_summary}...",
                     expanded=(conf < 0.85)
                 ):
                     c1, c2 = st.columns(2)
                     with c1:
-                        st.markdown("**Input**")
-                        st.text(f"Asset: {orig.asset}\nIssue: {orig.issue}\nCraft: {orig.craft}\nPriority: {orig.priority}")
+                        st.markdown("**Input Fields**")
+                        st.json(dict(orig.extra_fields))
                     with c2:
                         st.markdown("**Mapping**")
                         m = r.mapping
@@ -474,11 +506,15 @@ with tab_overrides:
         if st.button("📥 Export Overrides as JSONL"):
             jsonl_content = ""
             for ov in st.session_state.override_log:
+                # Build input string from whatever fields were present
+                input_parts = []
+                for k, v in ov["original_input"].items():
+                    input_parts.append(f"{k}: {v}")
+                input_str = ", ".join(input_parts)
+
                 record = {
                     "instruction": "Map CMMS data.",
-                    "input": f"Equip: {ov['original_input'].get('asset', '')}, "
-                             f"Note: {ov['original_input'].get('issue', '')}, "
-                             f"Craft: {ov['original_input'].get('craft', '')}",
+                    "input": input_str,
                     "output": json.dumps(ov["corrected_mapping"]),
                 }
                 jsonl_content += json.dumps(record) + "\n"

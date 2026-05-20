@@ -114,29 +114,70 @@ class CMMSMapping(BaseModel):
 
 class ClientWorkOrder(BaseModel):
     """
-    Raw input from a client system. Fields are deliberately loose
-    because client naming is unpredictable.
+    Dynamic client input — accepts ANY field names.
+
+    Clients send arbitrary JSON payloads (e.g. 'equipment_tag', 'work_desc',
+    'trade_code', 'building', etc.). This model captures them all in
+    `extra_fields` while still allowing a raw text blob for unstructured input.
+
+    Usage:
+        wo = ClientWorkOrder(
+            client_name="ACME Corp",
+            extra_fields={
+                "equipment_tag": "AHU-04-West",
+                "work_desc": "loud rattling, temp sensor reading high",
+                "trade_code": "MECH",
+                "building": "HQ",
+                "floor": "3",
+                "sla_tier": "gold",
+            }
+        )
     """
+    model_config = ConfigDict(extra="allow")
+
     client_id: str = Field(default="unknown")
     client_name: str = Field(default="")
-    asset: Optional[str] = Field(default=None, description="e.g. 'roof unit', 'chiller 2'")
-    issue: Optional[str] = Field(default=None, description="Free-text problem description")
-    craft: Optional[str] = Field(default=None, description="e.g. 'mechanic', 'sparky'")
-    priority: Optional[str] = Field(default=None, description="e.g. 'urgent', 'P1', 'low'")
-    location: Optional[str] = Field(default=None)
+    extra_fields: dict[str, str] = Field(
+        default_factory=dict,
+        description="All client-specific fields. Keys and values are arbitrary."
+    )
     raw_text: Optional[str] = Field(
         default=None,
-        description="Unstructured full description if no field breakdown available"
+        description="Optional full-text blob if client sends unstructured descriptions"
     )
+
+    # ── Convenience accessors (read from extra_fields) ──
+    @property
+    def all_fields(self) -> dict[str, str]:
+        """Return all fields (extra_fields) as a flat dict for processing."""
+        return dict(self.extra_fields)
+
+    def get_field(self, key: str, default: str = "") -> str:
+        """Get a field value case-insensitively, with a default."""
+        key_lower = key.lower()
+        for k, v in self.extra_fields.items():
+            if k.lower() == key_lower:
+                return v
+        return default
 
 
 class PipelineResult(BaseModel):
     """Final output from the pipeline, ready for CMMS API or human review."""
+    model_config = ConfigDict(validate_assignment=True)
+
     original: ClientWorkOrder
     mapping: CMMSMapping
-    pre_processed_fields: dict[str, str] = Field(
+    mapped_fields: dict[str, str] = Field(
         default_factory=dict,
-        description="Fields that were hard-mapped in Layer 1 (bypassing the LLM)"
+        description="Fields hard-mapped via control table (strategy=map) — bypassed LLM"
+    )
+    context_fields: dict[str, str] = Field(
+        default_factory=dict,
+        description="Fields injected into LLM prompt for context (strategy=context) — not mapped"
+    )
+    ignored_fields: list[str] = Field(
+        default_factory=list,
+        description="Fields dropped via control table (strategy=ignore)"
     )
     llm_called: bool = Field(default=False)
     confidence_score: float = Field(default=0.0)
