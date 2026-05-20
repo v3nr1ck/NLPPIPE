@@ -163,6 +163,79 @@ Any client field that matches **NO rule** defaults to `context` — it's passed 
 
 ---
 
+## v1.2.0 — Vendor Profiles + Nested Field Extraction + Custom Field Discovery (2025-05-19)
+
+**Commit:** `vendor-profiles` | **PR:** `#4`
+
+### Problem
+
+Real CMMS APIs have three characteristics our flat `extra_fields` couldn't handle:
+
+1. **Vendor-specific field names**: "Trade" is `WORKTYPE` (Maximo), `maintenanceType` (Fiix), `WorkCategory` (Brightly), `category` (UpKeep), `tradeCode` (Infor EAM) — 20+ variations across platforms.
+2. **Nested/child objects**: Trade/craft often lives in child arrays like `Labours[0].Craft` (Brightly) or `WPLABOR.CRAFT` (Maximo), not on the WO header.
+3. **Custom fields are first-class**: Every modern CMMS has `customFields[]` that often contain critical classification data.
+
+### Changes
+
+| File | Change |
+|---|---|
+| `vendor_profile.py` | NEW — Loader + flattening engine. Parses `field_aliases`, `nested_paths` (dot-bracket: `Labours[0].Craft`), auto-detects `customFields[]` arrays. |
+| `vendor_profiles/` | NEW — JSON profiles for Maximo, Fiix, UpKeep, Brightly + `_template.json` |
+| `vendor_profiles/maximo.json` | IBM Maximo: 40+ field aliases, 4 nested paths (`WPLABOR.CRAFT`, `LABTRANS.CRAFT`). `WPLABOR` → `all-caps` aliases to canonical snake_case. |
+| `vendor_profiles/fiix.json` | Fiix: 20 field aliases, nested `tasks[]` and `customFields[]` extraction. |
+| `vendor_profiles/upkeep.json` | UpKeep: flat modern API, `formItems[]` and `customFields[]` extraction. |
+| `vendor_profiles/brightly.json` | Brightly: `Labours[0].Craft` (index), `Labours[*].Craft` (wildcard join), nested `Scheduling.TargetCompletion`. |
+| `vendor_profiles/_template.json` | Documentation template for creating new vendor profiles. |
+| `schemas.py` | `extra_fields` type widened from `dict[str, str]` → `dict[str, Any]` (supports ints, floats, nested dicts/lists). |
+| `pre_processor.py` | Now accepts optional `VendorProfile`. Fallthrough uses vendor `default_strategies`. Skips nested dicts/lists (expects upstream flattening). |
+| `pipeline.py` | New `vendor=` parameter. When set, auto-flattens payload via `vendor_profile.flatten_payload()` before pre-processing. `list_vendors()` + `load_vendor()` for hot-swapping. |
+| `prompt_builder.py` | `build_user_prompt()` accepts `dict[str, Any]` for context fields. |
+| `post_processor.py` | `context_fields` type widened to `dict[str, Any]`. |
+| `test_pipeline.py` | 4 new tests: Maximo (nested WPLABOR, all-caps), Fiix (custom fields + tasks), Brightly (array index + wildcard), backward compat (no vendor). |
+
+### Nested Path Syntax
+
+| Syntax | Example | Result |
+|---|---|---|
+| Simple dot | `WPLABOR.CRAFT` | Traverses nested dicts: `data["WPLABOR"]["CRAFT"]` |
+| Array index | `Labours[0].Craft` | First element of array, then `"Craft"` field |
+| Array wildcard | `Labours[*].Craft` | All elements, joined with `", "` |
+| Custom fields auto | `customFields: [{name: "zone", value: "A"}]` | Auto-flattens to `cf_zone: "A"` |
+
+### Architecture After
+
+```
+Client API sends: {"DESCRIPTION": "...", "ASSETNUM": "PUMP-045",
+                    "WPLABOR": {"CRAFT": "Millwright"}, "WORKTYPE": "CM"}
+    │
+    ▼
+VENDOR PROFILE FLATTENING (new)
+    ├─ DESCRIPTION → description (alias)
+    ├─ ASSETNUM → asset (alias)
+    ├─ WPLABOR.CRAFT → craft_skill (nested extraction)
+    └─ WORKTYPE → trade_code (alias)
+    │
+    ▼
+LAYER 1 (Pre-Processor — uses canonical names + vendor default strategies)
+    │
+    ▼
+LAYER 2 (LLM)
+    │
+    ▼
+LAYER 3 (Post-Processor)
+```
+
+### Test Results
+
+| Test | Vendor | Nested Extraction | Custom Fields | Vendor Default Strategies |
+|---|---|---|---|---|
+| Maximo | ✅ WPLABOR.CRAFT → craft_skill | N/A | status, reported_by, est_labor_hours → ignored |
+| Fiix | ✅ tasks[0], tasks[*] | ✅ cf_safety_zone, cf_iso_cert_required | — |
+| Brightly | ✅ Labours[0].Craft, Labours[*].Craft, Scheduling.TargetCompletion | N/A | — |
+| No Vendor | N/A (raw fields) | N/A | Old rules still work |
+
+---
+
 ## Template for Future Changes
 
 ```markdown

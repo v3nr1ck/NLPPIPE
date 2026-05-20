@@ -5,6 +5,7 @@ No more hardcoded 'asset', 'issue', 'craft' — whatever the client sends
 gets injected into the prompt.
 """
 from __future__ import annotations
+from typing import Any
 from schemas import get_allowed_values_dict
 
 
@@ -86,12 +87,13 @@ def build_system_prompt(
 
 
 def build_user_prompt(
-    context_fields: dict[str, str],
+    context_fields: dict[str, Any],
     raw_text: str | None = None,
 ) -> str:
     """
     Build a dynamic user prompt from whatever context fields exist.
     No assumptions about field names — just iterate and format.
+    Non-string values are coerced to string.
     """
     lines = []
     for field_name, field_value in sorted(context_fields.items()):

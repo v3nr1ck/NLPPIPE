@@ -1,0 +1,53 @@
+{
+  "vendor_name": "Fiix (Rockwell Automation)",
+  "api_style": "JSON-RPC-style HTTP",
+  "field_aliases": {
+    "id": "work_order_id",
+    "code": "work_order_number",
+    "description": "description",
+    "priority": "priority",
+    "status": "status",
+    "maintenanceType": "trade_code",
+    "assetID": "asset",
+    "locationID": "location",
+    "siteID": "site",
+    "assignedUserID": "assigned_user",
+    "assignedTeamID": "assigned_team",
+    "assignedVendorID": "assigned_vendor",
+    "projectID": "project",
+    "budgetID": "budget",
+    "glAccountID": "gl_account",
+    "startDate": "start_date",
+    "dueDate": "due_date",
+    "completedDate": "completed_date",
+    "estimatedHours": "estimated_hours",
+    "estimatedCost": "estimated_cost"
+  },
+  "nested_paths": [
+    {"path": "tasks[0].description", "canonical": "primary_task"},
+    {"path": "tasks[*].description", "canonical": "all_tasks"},
+    {"path": "failureCodeIDs[0]", "canonical": "failure_code_id"},
+    {"path": "customTagIDs[*]", "canonical": "custom_tags"}
+  ],
+  "custom_fields_discovery": {
+    "endpoint": "GET /api/v2/lookuptables/customfields",
+    "note": "Custom fields are lookup-table-driven in Fiix"
+  },
+  "default_strategies": {
+    "description": "context",
+    "asset": "context",
+    "location": "context",
+    "priority": "context",
+    "trade_code": "map",
+    "assigned_user": "ignore",
+    "assigned_team": "context",
+    "assigned_vendor": "ignore",
+    "estimated_hours": "ignore",
+    "estimated_cost": "ignore",
+    "project": "ignore",
+    "budget": "ignore",
+    "gl_account": "ignore",
+    "site": "context",
+    "status": "ignore"
+  }
+}

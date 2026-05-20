@@ -1,0 +1,47 @@
+{
+  "vendor_name": "Brightly Asset Essentials",
+  "api_style": "REST (relational)",
+  "_note": "Brightly uses WorkCategory as explicit trade field. Labours[].Craft is the craft per labor line.",
+  "field_aliases": {
+    "WorkOrderId": "work_order_id",
+    "WorkOrderNumber": "work_order_number",
+    "BriefDescription": "description",
+    "WorkRequested": "long_description",
+    "AssetId": "asset",
+    "LocationId": "location",
+    "PriorityId": "priority",
+    "Status": "status",
+    "WorkCategory": "trade_code",
+    "ReportedBy": "reported_by",
+    "FailureCode": "failure_code",
+    "CauseCode": "cause_code",
+    "RemedyCode": "remedy_code"
+  },
+  "nested_paths": [
+    {"path": "Labours[0].Craft", "canonical": "primary_craft"},
+    {"path": "Labours[*].Craft", "canonical": "all_crafts"},
+    {"path": "Labours[0].Hours", "canonical": "labor_hours"},
+    {"path": "WorkTasks[*].Description", "canonical": "task_descriptions"},
+    {"path": "Scheduling.TargetCompletion", "canonical": "target_completion"},
+    {"path": "MaintenanceMaterials[*].PartName", "canonical": "parts_required"}
+  ],
+  "custom_fields_discovery": {
+    "endpoint": "GET /api/custom-fields",
+    "note": "Brightly supports custom fields on work orders, assets, and locations"
+  },
+  "default_strategies": {
+    "description": "context",
+    "long_description": "context",
+    "asset": "context",
+    "location": "context",
+    "priority": "context",
+    "trade_code": "map",
+    "failure_code": "context",
+    "cause_code": "context",
+    "remedy_code": "context",
+    "reported_by": "ignore",
+    "status": "ignore",
+    "primary_craft": "map",
+    "all_crafts": "context"
+  }
+}

@@ -12,7 +12,10 @@ import csv
 import fnmatch
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from vendor_profile import VendorProfile
 
 Strategy = Literal["map", "context", "ignore"]
 
@@ -41,14 +44,18 @@ class PreProcessor:
     """
     Reads the control table and classifies every incoming field.
 
-    Priority order:
-      1. Explicit map rules (highest priority)
-      2. Explicit context rules
-      3. Explicit ignore rules
-      4. If a field matches NO rule → treated as context (passed to LLM)
+    Resolution order:
+      1. Explicit control table rules (highest priority)
+      2. Vendor profile default_strategies (if vendor profile loaded)
+      3. Fallthrough: 'context' (pass to LLM)
     """
 
-    def __init__(self, control_table_path: str | Path):
+    def __init__(
+        self,
+        control_table_path: str | Path,
+        vendor_profile: "VendorProfile | None" = None,
+    ):
+        self.vendor_profile = vendor_profile
         self.rules: list[ControlRule] = []
         self._load_rules(Path(control_table_path))
 
@@ -72,13 +79,16 @@ class PreProcessor:
     def process(
         self,
         client_name: str,
-        extra_fields: dict[str, str],
+        extra_fields: dict[str, Any],
     ) -> PreProcessResult:
         """
         Classify every field in extra_fields into map/context/ignore.
 
         For each client field, the FIRST matching rule (by priority) wins.
-        Fields that match NO rule default to 'context'.
+        Fields that match NO rule default to the vendor's default_strategy (or 'context').
+        Non-string values (int, float, dict, list) are converted to strings.
+        Nested dicts/lists should be flattened BEFORE calling this method
+        (use vendor_profile.flatten_payload).
         """
         result = PreProcessResult()
 
@@ -87,7 +97,11 @@ class PreProcessor:
 
         for field_name, field_value in extra_fields.items():
             field_lower = field_name.lower().strip()
-            value_lower = field_value.strip().lower() if field_value else ""
+            # Convert non-string values to string for matching
+            if isinstance(field_value, (dict, list)):
+                # Skip nested structures — they should be flattened upstream
+                continue
+            value_lower = str(field_value).strip().lower() if field_value is not None else ""
             resolved = False
 
             for rule in self.rules:
@@ -127,9 +141,21 @@ class PreProcessor:
                     resolved = True
                     break  # Field is dropped
 
-            # ── Fallthrough: field matched NO rule → default to context ──
+            # ── Fallthrough: field matched NO rule ──
             if not resolved:
-                result.context[field_name] = field_value
+                # Check vendor profile default strategy
+                default_strategy = None
+                if self.vendor_profile:
+                    default_strategy = self.vendor_profile.default_strategies.get(field_lower)
+
+                if default_strategy == "map":
+                    # Vendor says map but no target_value in control table — treat as context
+                    result.context[field_name] = field_value
+                elif default_strategy == "ignore":
+                    result.ignored.append(field_name)
+                else:
+                    # Default: context (pass to LLM)
+                    result.context[field_name] = field_value
 
         # ── Determine remaining fields the LLM needs to fill ──
         all_target_fields = {"trade_id", "equipment_id", "problem_type_id", "problem_code_id"}

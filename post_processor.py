@@ -4,7 +4,7 @@ Validates LLM output against the Pydantic schema, computes confidence,
 and routes results to either auto-approve or human review.
 """
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Any
 from pydantic import ValidationError
 from schemas import CMMSMapping, PipelineResult, ClientWorkOrder
 from inference_engine import InferenceResult
@@ -35,7 +35,7 @@ class PostProcessor:
         original: ClientWorkOrder,
         inference_result: InferenceResult,
         mapped_fields: dict[str, str],
-        context_fields: dict[str, str],
+        context_fields: dict[str, Any],
         ignored_fields: list[str],
         llm_called: bool,
     ) -> PipelineResult:

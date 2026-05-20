@@ -5,7 +5,7 @@ Update these enums when your CMMS schema changes — no retraining needed.
 """
 from __future__ import annotations
 from enum import Enum
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -137,9 +137,9 @@ class ClientWorkOrder(BaseModel):
 
     client_id: str = Field(default="unknown")
     client_name: str = Field(default="")
-    extra_fields: dict[str, str] = Field(
+    extra_fields: dict[str, Any] = Field(
         default_factory=dict,
-        description="All client-specific fields. Keys and values are arbitrary."
+        description="All client-specific fields. Values can be str, int, float, list, dict — anything the client API sends."
     )
     raw_text: Optional[str] = Field(
         default=None,
@@ -148,11 +148,11 @@ class ClientWorkOrder(BaseModel):
 
     # ── Convenience accessors (read from extra_fields) ──
     @property
-    def all_fields(self) -> dict[str, str]:
-        """Return all fields (extra_fields) as a flat dict for processing."""
+    def all_fields(self) -> dict[str, Any]:
+        """Return all extra_fields as-is (may contain nested dicts, lists, numbers)."""
         return dict(self.extra_fields)
 
-    def get_field(self, key: str, default: str = "") -> str:
+    def get_field(self, key: str, default: Any = "") -> Any:
         """Get a field value case-insensitively, with a default."""
         key_lower = key.lower()
         for k, v in self.extra_fields.items():
@@ -171,7 +171,7 @@ class PipelineResult(BaseModel):
         default_factory=dict,
         description="Fields hard-mapped via control table (strategy=map) — bypassed LLM"
     )
-    context_fields: dict[str, str] = Field(
+    context_fields: dict[str, Any] = Field(
         default_factory=dict,
         description="Fields injected into LLM prompt for context (strategy=context) — not mapped"
     )

@@ -1,0 +1,43 @@
+{
+  "_comment": "VENDOR PROFILE TEMPLATE — Copy this file and fill in for each CMMS platform.",
+  "_instructions": {
+    "vendor_name": "Display name for the platform",
+    "field_aliases": "Map vendor field names → our canonical field names (before classification)",
+    "nested_paths": "Extract fields from nested objects/arrays using dot-bracket notation",
+    "custom_fields_discovery": "Optional: how to discover custom fields for this vendor",
+    "default_strategies": "Default strategy per canonical field (map/context/ignore) — overridable by control_table.csv"
+  },
+  "_nested_path_syntax": {
+    "simple_dot": "WPLABOR.CRAFT → traverses nested dicts",
+    "array_index": "Labours[0].Craft → first element of array",
+    "array_wildcard": "WorkTasks[*].tradeCode → joins all values with comma",
+    "custom_fields_auto": "If a field named 'customFields' is an array of {name,value} objects, auto-flattens into name:value pairs"
+  },
+
+  "vendor_name": "Template Vendor",
+  "field_aliases": {
+    "vendor_title_field": "title",
+    "vendor_description_field": "description",
+    "vendor_asset_field": "asset",
+    "vendor_priority_field": "priority",
+    "vendor_trade_field": "trade_code",
+    "vendor_location_field": "location"
+  },
+  "nested_paths": [
+    {"path": "ChildObject.FieldName", "canonical": "our_field_name"},
+    {"path": "ArrayField[0].FieldName", "canonical": "our_field_name"},
+    {"path": "ArrayField[*].FieldName", "canonical": "our_field_name"}
+  ],
+  "custom_fields_discovery": {
+    "endpoint": "GET /api/v2/custom-fields/workorders",
+    "response_path": "data[].name"
+  },
+  "default_strategies": {
+    "title": "context",
+    "description": "context",
+    "asset": "context",
+    "priority": "context",
+    "trade_code": "map",
+    "location": "context"
+  }
+}

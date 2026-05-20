@@ -1,0 +1,41 @@
+{
+  "vendor_name": "UpKeep",
+  "api_style": "REST (modern flat)",
+  "field_aliases": {
+    "id": "work_order_id",
+    "title": "title",
+    "description": "description",
+    "assetId": "asset",
+    "locationId": "location",
+    "priority": "priority",
+    "status": "status",
+    "dueDate": "due_date",
+    "category": "trade_code",
+    "assignedToUserIds": "assigned_users",
+    "teams": "assigned_teams",
+    "estimatedHours": "estimated_hours"
+  },
+  "nested_paths": [
+    {"path": "formItems[*].name", "canonical": "checklist_items"},
+    {"path": "formItems[*].value", "canonical": "checklist_values"},
+    {"path": "customFields[*].name", "canonical": "cf_name"},
+    {"path": "customFields[*].value", "canonical": "cf_value"},
+    {"path": "parts[*].name", "canonical": "parts_used"}
+  ],
+  "custom_fields_discovery": {
+    "endpoint": "GET /api/v2/custom-fields/workorders",
+    "note": "UpKeep exposes custom fields via dedicated endpoint"
+  },
+  "default_strategies": {
+    "title": "context",
+    "description": "context",
+    "asset": "context",
+    "location": "context",
+    "priority": "context",
+    "trade_code": "map",
+    "assigned_users": "ignore",
+    "assigned_teams": "context",
+    "estimated_hours": "ignore",
+    "status": "ignore"
+  }
+}
