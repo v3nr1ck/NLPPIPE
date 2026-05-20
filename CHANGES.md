@@ -147,6 +147,22 @@ Any client field that matches **NO rule** defaults to `context` — it's passed 
 
 ---
 
+## v1.1.1 — Cross-Platform Launchers + Code Signing Strategy (2025-05-19)
+
+**Commit:** `launchers-signing` | **PR:** `#3`
+
+### Changes
+
+| File | Change |
+|---|---|
+| `launch.bat` | NEW — Windows double-click launcher. Checks Python, creates venv, installs deps, opens browser, starts Streamlit. |
+| `launch.command` | NEW — macOS double-click launcher (Finder-compatible). Same bootstrap flow. |
+| `SIGNING.md` | NEW — 4-tier signing/trust strategy guide. Tier 1 (free/GitHub trust anchor) recommended for demos. |
+| `checksums.sha256` | NEW — SHA256 hashes of all distributable files for integrity verification. |
+| `.gitignore` | Updated to ignore `venv/` folder created by launchers. |
+
+---
+
 ## Template for Future Changes
 
 ```markdown
